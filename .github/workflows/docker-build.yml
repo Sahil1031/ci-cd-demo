@@ -1,4 +1,4 @@
-name: CI Pipeline
+name: CI/CD Pipeline
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - main
 
 jobs:
-  build:
+  build-and-push:
     runs-on: ubuntu-latest
 
     steps:
@@ -22,8 +22,22 @@ jobs:
       - name: Build Docker Image
         run: docker build -t ${{ secrets.DOCKER_USERNAME }}/sahil-ci-cd-app:latest .
 
-      - name: Push Docker Image to Docker Hub
+      - name: Push Docker Image
         run: docker push ${{ secrets.DOCKER_USERNAME }}/sahil-ci-cd-app:latest
 
-      - name: Confirm Success
-        run: echo "✅ Image built AND pushed to Docker Hub successfully!"
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            sudo docker pull ${{ secrets.DOCKER_USERNAME }}/sahil-ci-cd-app:latest
+            sudo docker stop my-app-container || true
+            sudo docker rm my-app-container || true
+            sudo docker run -d -p 3000:3000 --name my-app-container ${{ secrets.DOCKER_USERNAME }}/sahil-ci-cd-app:latest
